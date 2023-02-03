@@ -1,0 +1,141 @@
+#include "iostream"
+#include <thread>
+#include <chrono>
+
+
+#include "grpcpp/grpcpp.h"
+#include "simple_hello.grpc.pb.h"
+#include "simple_hello.pb.h"
+#include "healthCheck.grpc.pb.h"
+
+using grpc::Status;
+using grpc::ServerContext;
+using grpc::Server;
+using grpc::ServerBuilder;
+
+using simple::Request;
+using simple::Response;
+using simple::RequestService;
+using simple::HealthCheckRequest;
+using simple::HealthCheckResponse;
+
+
+using grpc::health::v1::Health;
+
+using namespace std;
+#include <chrono>
+#include <thread>
+
+std::chrono::milliseconds timespan(9999); // or whatever
+ std::atomic<int> count1 =0;
+ std::atomic<int> Count = 0;
+
+class HealthServiceImpl final : public grpc::health::v1::Health::Service {
+
+    Status Check(ServerContext* context,
+                const grpc::health::v1::HealthCheckRequest* request,
+                grpc::health::v1::HealthCheckResponse* reply)override{
+// reply->set_status(HealthCheckResponse::ServingStatus::UNKNOWN);
+    if (status==grpc::health::v1::HealthCheckResponse_ServingStatus_UNKNOWN){
+        std::cout<<" health check Status UNKNOWN "<<std::endl;
+    }else{
+        std::cout<<" health check Status OTHERS "<<std::endl;
+    }
+    std::cout<<"Query = "<<request->service()<<std::endl;
+reply->set_status(status);
+    if (reply->status()==grpc::health::v1::HealthCheckResponse_ServingStatus_UNKNOWN){
+        std::cout<<" reply Status UNKNOWN "<<std::endl;
+    }else{
+        std::cout<<" reply check Status OTHERS "<<std::endl;
+    }
+std::cout<<"health check status"<<std::endl;
+ return Status::OK;
+// return Status(grpc::StatusCode::CANCELLED, "HealthServiceImpl");
+        // return Status::OK;
+    }
+public:
+// grpc::health::v1::HealthCheckResponse::ServingStatus status= grpc::health::v1::HealthCheckResponse_ServingStatus_UNKNOWN;
+grpc::health::v1::HealthCheckResponse::ServingStatus status=   grpc::health::v1::HealthCheckResponse_ServingStatus_SERVICE_UNKNOWN;
+
+};
+
+class RequestServiceImpl final : public RequestService::Service {
+
+    Status Check(ServerContext* context,
+                const HealthCheckRequest* request,
+                HealthCheckResponse* reply)override{
+// reply->set_status(HealthCheckResponse::ServingStatus::UNKNOWN);
+reply->set_status(simple::HealthCheckResponse_ServingStatus_SERVICE_UNKNOWN);
+ return Status::OK;
+// return Status(grpc::StatusCode::CANCELLED, "RequestServiceImpl-->.");
+        // return Status::OK;
+    }
+    Status rService(ServerContext* context, 
+                    const Request* request,
+                    Response* reply) override {
+    std::string prefix("Hello ");
+    Count ++;
+    localCount = localCount + 1;
+    auto clientMetaData = context->client_metadata();
+    std::cout<<"peer "<< context->peer()<<std::endl;
+    std::cout<<"simple Server rService "<<clientMetaData.size()<<std::endl;
+    for(auto [key,value]:clientMetaData){
+        std::cout<<key<<"--"<<value<<std::endl;
+    }
+    if(count1%2==0){
+        count1 ++;
+    // std::this_thread::sleep_for(timespan);
+   
+    prefix = "sleeping" + std::to_string(count1)+ "Active serve "+ std::to_string(Count)+" "+std::to_string(localCount)+" ";
+    }else{
+        count1 ++;
+        prefix = "Hello " + std::to_string(count1)+ "Active serve "+ std::to_string(Count)+" "+std::to_string(localCount)+" ";
+    }
+    Count --;
+    localCount = localCount -1;
+    if (context->IsCancelled()) {
+        std::cout<<"Deadline reached"<<std::endl;
+        return Status(grpc::StatusCode::CANCELLED, "1Deadline exceeded or Client cancelled, abandoning.");
+    }
+    reply->set_response(prefix + request->query()+" "+std::to_string(Count)+" "+std::to_string(localCount) );
+   
+    return Status::OK;
+    }
+
+
+
+private:
+    static int localCount;
+};
+
+int RequestServiceImpl::localCount =0;
+void helathCheck(HealthServiceImpl* rHealth){
+while(true){
+ 
+ std::this_thread::sleep_for(timespan);
+ long int t = static_cast<long int> (time(NULL));
+ t = t/10;
+//  t = count1;
+//  auto nanos = duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+ if ( t % 2 ==0){
+    std::cout<<"Health check thread HealthCheckResponse_ServingStatus_UNKNOWN="<<t<<std::endl;
+ rHealth->status = grpc::health::v1::HealthCheckResponse_ServingStatus_UNKNOWN;
+ }
+ else{
+     std::cout<<"Health check thread HealthCheckResponse_ServingStatus_SERVICE_UNKNOWN="<<t<<std::endl;
+     rHealth->status = grpc::health::v1::HealthCheckResponse_ServingStatus_SERVICE_UNKNOWN;
+ }
+}
+}
+int main(){
+
+    ServerBuilder builder;
+    RequestServiceImpl rService;
+    HealthServiceImpl rHealth;
+    std::thread healthCheck(helathCheck,&rHealth);
+    builder.AddListeningPort("localhost:4000", grpc::InsecureServerCredentials());
+    builder.RegisterService(&rService);
+    builder.RegisterService(&rHealth);
+    std::unique_ptr<Server> server(builder.BuildAndStart());
+    server->Wait();
+}

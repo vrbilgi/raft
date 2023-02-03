@@ -1,0 +1,111 @@
+#include "iostream"
+#include <thread>
+#include <chrono>
+
+#include "grpcpp/grpcpp.h"
+#include "simple_hello.grpc.pb.h"
+#include "healthCheck.grpc.pb.h"
+
+using namespace std;
+
+using grpc::Channel;
+using grpc::ClientContext;
+using grpc::Status;
+
+// using grpc::health::v1::Health;
+using simple::HealthCheckRequest;
+using simple::HealthCheckResponse;
+
+using simple::Response;
+using simple::Request;
+using simple::RequestService;
+
+using grpc::health::v1::Health;
+
+void healthCheckProbe_2(){
+    std::shared_ptr<Channel> channel_sptr = grpc::CreateChannel("localhost:4000",grpc::InsecureChannelCredentials());
+    std::unique_ptr<grpc::health::v1::Health::Stub> client_uptr = grpc::health::v1::Health::NewStub(channel_sptr);  
+    grpc::health::v1::HealthCheckRequest helathRequest;
+    ClientContext client_context;
+    grpc::health::v1::HealthCheckResponse healthResponse;
+    helathRequest.set_service("rService");
+    Status status = client_uptr->Check(&client_context,helathRequest,&healthResponse);
+     if( status.ok()){
+        std::cout<<" health check Status OK  "<<std::endl;
+    }else if(status.error_code() == grpc::StatusCode::DEADLINE_EXCEEDED){
+        std::cout<<"helath check status<--DEADLINE_EXCEEDED-->"<<status.error_code() << ": " << status.error_message()<<std::endl;
+    }
+    else{
+        std::cout<<"health check status<--None-->"<<status.error_code() << ": " << status.error_message()<<std::endl;
+    }
+    if (healthResponse.status()==grpc::health::v1::HealthCheckResponse_ServingStatus_UNKNOWN){
+        std::cout<<" health check Status UNKNOWN "<<std::endl;
+    }else{
+        std::cout<<" health check Status OTHERS "<<std::endl;
+    }
+}
+void healthCheckProbe(){
+    std::shared_ptr<Channel> channel_sptr = grpc::CreateChannel("localhost:4000",grpc::InsecureChannelCredentials());
+    std::unique_ptr<RequestService::Stub> client_uptr = RequestService::NewStub(channel_sptr);  
+    HealthCheckRequest helathRequest;
+    ClientContext client_context;
+    HealthCheckResponse healthResponse;
+    helathRequest.set_service("rService");
+    Status status = client_uptr->Check(&client_context,helathRequest,&healthResponse);
+     if( status.ok()){
+        std::cout<<" health check Status OK  "<<std::endl;
+    }else if(status.error_code() == grpc::StatusCode::DEADLINE_EXCEEDED){
+        std::cout<<"helath check status<--DEADLINE_EXCEEDED-->"<<status.error_code() << ": " << status.error_message()<<std::endl;
+    }
+    else{
+        std::cout<<"health check status<--None-->"<<status.error_code() << ": " << status.error_message()<<std::endl;
+    }
+}
+void runClient(){
+    
+    std::shared_ptr<Channel> channel_sptr = grpc::CreateChannel("localhost:4000",grpc::InsecureChannelCredentials());
+std::unique_ptr<RequestService::Stub> client_uptr = RequestService::NewStub(channel_sptr);
+Request request;
+request.set_query("Hello");
+Response response;
+    ClientContext client_context;
+    const std::chrono::time_point deadline = std::chrono::system_clock::now() +
+    std::chrono::milliseconds(100);
+    client_context.set_deadline(deadline);
+    // client_context.AddMetadata("UUIDXXXX", "1234-VXYZ-0987-QWER");
+    //client_context.AddMetadata("UUIDXXXX", "testvalue");
+    // client_context.AddMetadata("uuidxxxx", "testvalue");
+    //client_context.AddMetadata("Uuidxxxx", "1234-VXYZ-0987-QWER");
+    client_context.AddMetadata("uuidxxxxxxxxxxxxxxxxxxxxxxxxx", "1234-VXYZ-0987-QWER-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX");
+    //client_context.AddMetadata("testkey", "testvalue");
+    std::cout<<"peer 1 "<< client_context.peer()<<std::endl;
+    //Below service call is blocking call
+    Status status = client_uptr->rService(&client_context,request,&response);
+    std::cout<<"peer 2 "<< client_context.peer()<<std::endl;
+    if( status.ok()){
+        std::cout<<" Reply from server ="<<response.response()<<std::endl;
+    }else if(status.error_code() == grpc::StatusCode::DEADLINE_EXCEEDED){
+        std::cout<<"status<---->"<<status.error_code() << ": " << status.error_message()<<std::endl;
+    }
+    else{
+        std::cout<<"status<---->"<<status.error_code() << ": " << status.error_message()<<std::endl;
+    }
+}
+
+int main(){
+
+
+std::vector<std::thread> threadPool;
+healthCheckProbe();
+healthCheckProbe_2();
+runClient();
+// std::thread t1(runClient);
+// runClient(client_uptr,request,response);
+// for(int i = 0; i<1;i++){
+//     threadPool.emplace_back(runClient); 
+// }
+// for(int i = 0; i<1;i++){
+//     threadPool[i].join();
+// }
+
+}
